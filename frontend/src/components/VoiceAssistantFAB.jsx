@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Mic, MicOff, Volume2, X } from 'lucide-react';
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+import { processVoiceCommand } from '../api/client';
 
 // ─── Silence detection config ─────────────────────────────────────────────────
 const SILENCE_THRESHOLD = 15;       // RMS below this = silence (0-128 scale)
@@ -175,11 +174,7 @@ export default function VoiceAssistantFAB({ onToggle, onCameraFound, onCamerasCh
         setProcessing(true);
         setShowPopup(true);
         try {
-            const form = new FormData();
-            form.append('file', blob, 'audio.webm');
-            const res = await fetch(`${API_BASE}/voice`, { method: 'POST', body: form });
-            if (!res.ok) throw new Error(`Server ${res.status}`);
-            const data = await res.json();
+            const data = await processVoiceCommand(blob);
 
             const msg = getResponseMessage(data);
             setTranscript(data.spoken_text || null);
