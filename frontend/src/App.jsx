@@ -86,8 +86,9 @@ function App() {
   };
 
   // Only remove from canvas (unplace), keep in DB & sidebar
-  const handleUnplaceCamera = (cameraId) => {
-    setPlacedCameras((prev) => prev.filter(c => c.id !== cameraId));
+  // Uses instanceId so that multiple drops of the same camera can be closed independently
+  const handleUnplaceCamera = (instanceId) => {
+    setPlacedCameras((prev) => prev.filter(c => c.instanceId !== instanceId));
   };
 
   // Permanently delete from DB + sidebar + canvas
