@@ -1,7 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { X, Camera, Maximize2, Minimize2, Wifi, WifiOff, GripHorizontal } from 'lucide-react';
 
-const PLACEHOLDER_VIDEO = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
 
 export default function LiveCameraFeed({ camera, onClose }) {
     const videoRef = useRef(null);
@@ -14,10 +13,8 @@ export default function LiveCameraFeed({ camera, onClose }) {
     const streamUrl = camera.streamUrl;
     const isPlayable =
         streamUrl &&
-        !streamUrl.startsWith('rtsp://') &&
-        streamUrl !== 'http://example.com/stream';
+        !streamUrl.startsWith('rtsp://');
 
-    const effectiveUrl = isPlayable ? streamUrl : PLACEHOLDER_VIDEO;
 
     const handleHeaderMouseDown = (e) => {
         if (e.button !== 0) return;
@@ -122,10 +119,10 @@ export default function LiveCameraFeed({ camera, onClose }) {
                         <p className="text-zinc-400 text-xs font-medium">Feed Unavailable</p>
                         <p className="text-zinc-600 text-[10px] mt-1">Check stream URL or network</p>
                     </div>
-                ) : (
+                ) : isPlayable ? (
                     <video
                         ref={videoRef}
-                        src={effectiveUrl}
+                        src={streamUrl}
                         autoPlay
                         muted
                         loop
@@ -133,6 +130,12 @@ export default function LiveCameraFeed({ camera, onClose }) {
                         className="w-full h-full object-cover"
                         onError={() => setVideoError(true)}
                     />
+                ) : (
+                    <div className="text-center p-6 z-20">
+                        <Camera size={36} className="text-zinc-700 mx-auto mb-3" />
+                        <p className="text-zinc-400 text-xs font-medium">No Stream Configured</p>
+                        <p className="text-zinc-600 text-[10px] mt-1">Set a stream URL for this camera in settings</p>
+                    </div>
                 )}
 
                 {/* ── PROMINENT CLOSE BUTTON — always visible inside video ── */}
@@ -162,7 +165,7 @@ export default function LiveCameraFeed({ camera, onClose }) {
             {/* ── Footer ── */}
             <div className="px-3 py-1.5 bg-zinc-800/50 border-t border-zinc-800 flex items-center justify-between">
                 <span className="text-[9px] font-mono text-zinc-600 truncate max-w-[70%]">
-                    {isPlayable ? streamUrl : '● Placeholder stream (no URL set)'}
+                    {isPlayable ? streamUrl : '● No stream URL set'}
                 </span>
                 <span className="text-[9px] text-zinc-600 flex-shrink-0">
                     {width}×{height}
