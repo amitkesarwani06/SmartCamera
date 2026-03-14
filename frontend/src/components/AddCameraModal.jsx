@@ -1,28 +1,49 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 
-export default function AddCameraModal({ isOpen, onClose, onAddCamera }) {
+export default function AddCameraModal({ isOpen, onClose, onAddCamera, onUpdateCamera, editCamera, defaultPlaceId }) {
     if (!isOpen) return null;
 
     const [name, setName] = useState('');
     const [type, setType] = useState('Dome Camera');
     const [streamUrl, setStreamUrl] = useState('');
 
+    // Pre-fill fields when editing
+    useEffect(() => {
+        if (editCamera) {
+            setName(editCamera.name || '');
+            setType(editCamera.type || 'Dome Camera');
+            setStreamUrl(editCamera.streamUrl || '');
+        } else {
+            setName('');
+            setType('Dome Camera');
+            setStreamUrl('');
+        }
+    }, [editCamera, isOpen]);
+
     const handleSubmit = (e) => {
         e.preventDefault();
         if (!name.trim()) return;
 
-        onAddCamera({
-            name: name.trim(),
-            streamUrl: streamUrl.trim() || 'http://example.com/stream',
-            type: type,
-            status: 'active',
-            placeId: null  // Can be extended to support place selection
-        });
+        if (editCamera) {
+            // Edit mode — send PATCH
+            onUpdateCamera(editCamera.id, {
+                name: name.trim(),
+                streamUrl: streamUrl.trim() || editCamera.streamUrl,
+                type: type,
+            });
+        } else {
+            // Create mode — send POST
+            onAddCamera({
+                name: name.trim(),
+                streamUrl: streamUrl.trim() || 'http://example.com/stream',
+                type: type,
+                status: 'active',
+                placeId: defaultPlaceId || null
+            });
+        }
 
-        setName('');
-        setType('Dome Camera');
-        setStreamUrl('');
+        onClose();
     };
 
     return (
@@ -35,8 +56,8 @@ export default function AddCameraModal({ isOpen, onClose, onAddCamera }) {
                     <X size={20} />
                 </button>
 
-                <h2 className="text-xl font-bold text-white mb-1">Add New Camera</h2>
-                <p className="text-zinc-500 text-sm mb-6">Configure the camera details below.</p>
+                <h2 className="text-xl font-bold text-white mb-1">{editCamera ? 'Edit Camera' : 'Add New Camera'}</h2>
+                <p className="text-zinc-500 text-sm mb-6">{editCamera ? 'Update the camera details below.' : 'Configure the camera details below.'}</p>
 
                 <form onSubmit={handleSubmit} className="space-y-5">
                     <div>
@@ -73,6 +94,7 @@ export default function AddCameraModal({ isOpen, onClose, onAddCamera }) {
                                 <option value="Dome Camera">Dome Camera (360° View)</option>
                                 <option value="Bullet Camera">Bullet Camera (Long Range)</option>
                                 <option value="PTZ Camera">PTZ Camera (Zoom/Tilt)</option>
+                                <option value="RTSP Camera">RTSP Camera</option>
                             </select>
                             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-500">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
@@ -92,7 +114,7 @@ export default function AddCameraModal({ isOpen, onClose, onAddCamera }) {
                             type="submit"
                             className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-all text-sm"
                         >
-                            Add Camera
+                            {editCamera ? 'Save Changes' : 'Add Camera'}
                         </button>
                     </div>
                 </form>
