@@ -122,6 +122,22 @@ export default function VoiceAssistantFAB({ onToggle, onCameraFound, onCamerasCh
     // ── Start recording ──────────────────────────────────────────────────────
     const startRecording = async () => {
         try {
+            console.log("[VoiceAssistant] Checking microphone access...");
+            console.log("[VoiceAssistant] Secure Context:", window.isSecureContext);
+            console.log("[VoiceAssistant] Origin:", window.location.origin);
+
+            if (!window.isSecureContext && window.location.hostname !== 'localhost') {
+                setError(`Microphone access requires HTTPS or localhost. Current origin: ${window.location.origin}`);
+                setShowPopup(true);
+                return;
+            }
+
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                setError("Microphone API not available. This usually happens in non-secure (HTTP) contexts or older browsers.");
+                setShowPopup(true);
+                return;
+            }
+
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             streamRef.current = stream;
             const mr = new MediaRecorder(stream);
@@ -151,8 +167,20 @@ export default function VoiceAssistantFAB({ onToggle, onCameraFound, onCamerasCh
             });
 
         } catch (err) {
-            console.error('Mic error:', err);
-            setError('Microphone access denied. Click the lock icon in your browser address bar to allow it.');
+            console.error('[VoiceAssistant] Detailed Mic Error:', err);
+            let errMsg = 'Microphone access denied. Click the lock icon in your browser address bar to allow it.';
+
+            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                errMsg = "Permission Denied: Please click the lock icon in your browser's address bar and 'Allow' the microphone.";
+            } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                errMsg = "No Microphone Found: Please ensure your microphone is plugged in and recognized by your system.";
+            } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+                errMsg = "Microphone Busy: Your microphone is likely being used by another app (like Zoom or Teams).";
+            } else {
+                errMsg = `Microphone Error (${err.name}): ${err.message}`;
+            }
+
+            setError(errMsg);
             setShowPopup(true);
         }
     };

@@ -1,7 +1,7 @@
 import React from 'react';
-import { Shield } from 'lucide-react';
+import { Shield, Settings } from 'lucide-react';
 
-export default function Navbar() {
+export default function Navbar({ onOpenSettings }) {
     return (
         <nav className="h-16 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between px-6 z-10 shrink-0">
             <div className="flex items-center gap-3">
@@ -13,6 +13,13 @@ export default function Navbar() {
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                     <span className="text-zinc-400 text-xs uppercase tracking-wider font-semibold">System Online</span>
                 </div>
+                <button
+                    onClick={onOpenSettings}
+                    title="Automation Settings"
+                    className="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center border border-zinc-700 text-zinc-400 hover:text-indigo-400 hover:bg-zinc-700 hover:border-indigo-500/40 cursor-pointer transition-all duration-200"
+                >
+                    <Settings className="w-[18px] h-[18px]" />
+                </button>
                 <div className="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center border border-zinc-700 text-zinc-400 font-medium hover:bg-zinc-700 cursor-pointer transition-colors">
                     AD
                 </div>

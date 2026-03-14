@@ -1,0 +1,63 @@
+###############################################
+# MediaMTX configuration for Docker
+# Documentation: https://github.com/bluenviron/mediamtx
+
+# Log level
+logLevel: info
+
+# RTSP settings
+rtspAddress: :8554
+
+# HLS (optional - exposes stream on port 8888)
+hls: yes
+hlsAddress: :8888
+
+# WebRTC (optional - exposes stream on port 8889)
+webrtc: yes
+webrtcAddress: :8889
+
+# API / metrics (optional - port 9997)
+api: yes
+apiAddress: :9997
+
+# Stream paths
+paths:
+  # Stream a looping video file via FFmpeg inside the container
+  # The file is mounted at /videos/sample.mp4 via docker-compose.yml
+  # Test stream URL: rtsp://localhost:8554/sample
+  sample:
+    # runOnInit: starts FFmpeg immediately when MediaMTX boots (not waiting for a viewer)
+    # Using -c copy (no re-encode) = minimal CPU usage
+    runOnInit: >-
+      ffmpeg -re -stream_loop -1
+      -i /videos/sample.mp4
+      -c copy
+      -f rtsp rtsp://localhost:8554/sample
+    runOnInitRestart: yes
+  # ── Additional streams (multi-camera simulation) ───────────────────
+  # Place cam1.mp4 / cam2.mp4 / cam3.mp4 in mediamtx/videos/ to use.
+  # If only sample.mp4 exists, copy it: cp mediamtx/videos/sample.mp4 mediamtx/videos/cam1.mp4
+
+  cam1:
+    runOnInit: >-
+      ffmpeg -re -stream_loop -1
+      -i /videos/cam1.mp4
+      -c copy
+      -f rtsp rtsp://localhost:8554/cam1
+    runOnInitRestart: yes
+
+  cam2:
+    runOnInit: >-
+      ffmpeg -re -stream_loop -1
+      -i /videos/cam2.mp4
+      -c copy
+      -f rtsp rtsp://localhost:8554/cam2
+    runOnInitRestart: yes
+
+  cam3:
+    runOnInit: >-
+      ffmpeg -re -stream_loop -1
+      -i /videos/cam3.mp4
+      -c copy
+      -f rtsp rtsp://localhost:8554/cam3
+    runOnInitRestart: yes

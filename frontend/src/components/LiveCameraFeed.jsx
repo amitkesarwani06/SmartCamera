@@ -1,5 +1,6 @@
-import React, { useRef, useState } from 'react';
-import { X, Camera, Maximize2, Minimize2, Wifi, WifiOff, GripHorizontal } from 'lucide-react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { X, Camera, Maximize2, Minimize2, Wifi, WifiOff, GripHorizontal, Loader } from 'lucide-react';
+import Hls from 'hls.js';
 
 
 export default function LiveCameraFeed({ camera, onClose }) {
@@ -10,10 +11,147 @@ export default function LiveCameraFeed({ camera, onClose }) {
     const [pos, setPos] = useState({ x: camera.x, y: Math.max(camera.y, 8) });
     const dragOffset = useRef({ x: 0, y: 0 });
 
+    // ── Dashboard Snapshot: capture video frame and POST to backend every 30s ──
+    const captureAndSendSnapshot = useCallback(() => {
+        const video = videoRef.current;
+        if (!video || video.readyState < 2 || video.videoWidth === 0) return;
+
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            const base64 = canvas.toDataURL('image/jpeg', 0.85);
+
+            fetch(`http://localhost:8000/snapshot/${camera.id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: base64 }),
+            }).catch((err) => console.warn('[Snapshot] Failed to send:', err));
+        } catch (err) {
+            console.warn('[Snapshot] Canvas capture error:', err);
+        }
+    }, [camera.id]);
+
+    useEffect(() => {
+        // Send an initial snapshot 5s after mount, then every 30s
+        const initial = setTimeout(captureAndSendSnapshot, 5000);
+        const interval = setInterval(captureAndSendSnapshot, 30000);
+        return () => {
+            clearTimeout(initial);
+            clearInterval(interval);
+        };
+    }, [captureAndSendSnapshot]);
+
     const streamUrl = camera.streamUrl;
-    const isPlayable =
-        streamUrl &&
-        !streamUrl.startsWith('rtsp://');
+
+    // ── URL helpers ──────────────────────────────────────────────────
+    const getRtspPath = (url) => {
+        if (!url || !url.startsWith('rtsp://')) return null;
+        try { return new URL(url).pathname.replace(/^\//, ''); } catch { return null; }
+    };
+
+    const getWebRtcUrl = (url) => {
+        const path = getRtspPath(url);
+        return path ? `http://localhost:8889/${path}/whep` : null;
+    };
+
+    const getHlsUrl = (url) => {
+        if (!url) return null;
+        const path = getRtspPath(url);
+        if (path) return `http://localhost:8888/${path}/`;
+        if (url.includes('.m3u8') || url.startsWith('http')) return url;
+        return null;
+    };
+
+    const webrtcUrl = getWebRtcUrl(streamUrl);
+    const hlsUrl = getHlsUrl(streamUrl);
+    const hasStream = Boolean(webrtcUrl || hlsUrl);
+
+    const [isLoading, setIsLoading] = useState(hasStream);
+    const [protocol, setProtocol] = useState(null); // 'webrtc' | 'hls'
+    const pcRef = useRef(null);
+
+    // ── WebRTC WHEP (primary, ultra-low latency) ──────────────────────
+    const startHls = useCallback(() => {
+        if (!hlsUrl || !videoRef.current) { setVideoError(true); return; }
+        const video = videoRef.current;
+
+        if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = hlsUrl;
+            video.play().catch(() => { });
+            setIsLoading(false);
+            setProtocol('hls');
+            return;
+        }
+        if (!Hls.isSupported()) { setVideoError(true); return; }
+
+        const hls = new Hls({ liveSyncDurationCount: 1, liveMaxLatencyDurationCount: 3 });
+        hls.loadSource(hlsUrl);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            setIsLoading(false);
+            setProtocol('hls');
+            video.play().catch(() => { });
+        });
+        hls.on(Hls.Events.ERROR, (_e, data) => {
+            if (data.fatal) { setVideoError(true); setIsLoading(false); }
+        });
+        return () => hls.destroy();
+    }, [hlsUrl]);
+
+    useEffect(() => {
+        if (!hasStream || !videoRef.current) return;
+        const video = videoRef.current;
+
+        // Reset state on stream change
+        setVideoError(false);
+        setIsLoading(true);
+        setProtocol(null);
+        if (pcRef.current) { pcRef.current.close(); pcRef.current = null; }
+
+        if (!webrtcUrl) { return startHls(); }
+
+        // Try WebRTC WHEP
+        const pc = new RTCPeerConnection();
+        pcRef.current = pc;
+
+        pc.addTransceiver('video', { direction: 'recvonly' });
+        pc.addTransceiver('audio', { direction: 'recvonly' });
+
+        pc.ontrack = (ev) => {
+            if (video.srcObject !== ev.streams[0]) {
+                video.srcObject = ev.streams[0];
+                video.play().catch(() => { });
+                setIsLoading(false);
+                setProtocol('webrtc');
+            }
+        };
+
+        pc.createOffer()
+            .then(offer => pc.setLocalDescription(offer))
+            .then(() => fetch(webrtcUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/sdp' },
+                body: pc.localDescription.sdp,
+            }))
+            .then(res => {
+                if (!res.ok) throw new Error(`WHEP ${res.status}`);
+                return res.text();
+            })
+            .then(sdp => pc.setRemoteDescription({ type: 'answer', sdp }))
+            .catch(() => {
+                // WebRTC failed — fall back to HLS
+                pc.close();
+                pcRef.current = null;
+                startHls();
+            });
+
+        return () => { pc.close(); pcRef.current = null; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [streamUrl]);
 
 
     const handleHeaderMouseDown = (e) => {
@@ -75,7 +213,16 @@ export default function LiveCameraFeed({ camera, onClose }) {
                 </div>
 
                 <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
-                    {/* Live badge */}
+                    {/* Protocol badge */}
+                    {protocol && (
+                        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-widest ${protocol === 'webrtc'
+                                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                                : 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
+                            }`}>
+                            {protocol === 'webrtc' ? '⚡ WebRTC' : '📡 HLS'}
+                        </span>
+                    )}
+
                     <div className="flex items-center gap-1 bg-zinc-900/60 px-2 py-0.5 rounded-full">
                         {videoError
                             ? <WifiOff size={10} className="text-red-400" />
@@ -119,23 +266,28 @@ export default function LiveCameraFeed({ camera, onClose }) {
                         <p className="text-zinc-400 text-xs font-medium">Feed Unavailable</p>
                         <p className="text-zinc-600 text-[10px] mt-1">Check stream URL or network</p>
                     </div>
-                ) : isPlayable ? (
-                    <video
-                        ref={videoRef}
-                        src={streamUrl}
-                        autoPlay
-                        muted
-                        loop
-                        playsInline
-                        className="w-full h-full object-cover"
-                        onError={() => setVideoError(true)}
-                    />
-                ) : (
+                ) : !hasStream ? (
                     <div className="text-center p-6 z-20">
                         <Camera size={36} className="text-zinc-700 mx-auto mb-3" />
                         <p className="text-zinc-400 text-xs font-medium">No Stream Configured</p>
                         <p className="text-zinc-600 text-[10px] mt-1">Set a stream URL for this camera in settings</p>
                     </div>
+                ) : (
+                    <>
+                        {isLoading && (
+                            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/70">
+                                <Loader size={28} className="text-emerald-400 animate-spin mb-2" />
+                                <p className="text-zinc-400 text-[10px] font-mono">Buffering stream...</p>
+                            </div>
+                        )}
+                        <video
+                            ref={videoRef}
+                            autoPlay
+                            muted
+                            playsInline
+                            className="w-full h-full object-cover"
+                        />
+                    </>
                 )}
 
                 {/* ── PROMINENT CLOSE BUTTON — always visible inside video ── */}
@@ -165,7 +317,7 @@ export default function LiveCameraFeed({ camera, onClose }) {
             {/* ── Footer ── */}
             <div className="px-3 py-1.5 bg-zinc-800/50 border-t border-zinc-800 flex items-center justify-between">
                 <span className="text-[9px] font-mono text-zinc-600 truncate max-w-[70%]">
-                    {isPlayable ? streamUrl : '● No stream URL set'}
+                    {hasStream ? (streamUrl?.startsWith('rtsp://') ? '● HLS (via MediaMTX)' : streamUrl) : '● No stream URL set'}
                 </span>
                 <span className="text-[9px] text-zinc-600 flex-shrink-0">
                     {width}×{height}

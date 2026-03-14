@@ -1,24 +1,39 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import Canvas from './components/Canvas';
+import FactorySidebar from './components/FactorySidebar';
+import CameraGrid from './components/CameraGrid';
 import AddCameraModal from './components/AddCameraModal';
+import AddPlaceModal from './components/AddPlaceModal';
 import VoiceAssistantFAB from './components/VoiceAssistantFAB';
+import SettingsPanel from './components/SettingsPanel';
 import VideoPlayerModal from './components/VideoPlayerModal';
-import { getCameras, createCamera, deleteCamera } from './api/client';
+import { getCameras, getPlaces, createCamera, deleteCamera, updateCamera, createPlace, deletePlace } from './api/client';
 
 function App() {
   const [cameras, setCameras] = useState([]);
+  const [places, setPlaces] = useState([]);
   const [placedCameras, setPlacedCameras] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isPlaceModalOpen, setIsPlaceModalOpen] = useState(false);
+  const [editCamera, setEditCamera] = useState(null);
   const [isListening, setIsListening] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [viewingCamera, setViewingCamera] = useState(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [addCameraPlaceId, setAddCameraPlaceId] = useState(null);
 
-  // Fetch cameras from backend on mount
+  // ── CCTV Dashboard State ──
+  const [selectedFactory, setSelectedFactory] = useState(null);
+  const [factoryCameras, setFactoryCameras] = useState([]);
+  const [factoryCamerasLoading, setFactoryCamerasLoading] = useState(false);
+
+  // Fetch cameras & places from backend on mount
   useEffect(() => {
     loadCameras();
+    loadPlaces();
   }, []);
 
   const loadCameras = async () => {
@@ -35,19 +50,59 @@ function App() {
     }
   };
 
-  // Drag start: store camera data
+  const loadPlaces = async () => {
+    try {
+      const data = await getPlaces();
+      setPlaces(data);
+    } catch (err) {
+      console.error('Failed to load places:', err);
+    }
+  };
+
+  // ── Camera-to-place count mapping ──
+  const cameraCounts = useMemo(() => {
+    const counts = {};
+    places.forEach(p => {
+      const placeCams = cameras.filter(c => c.placeId === p.id);
+      counts[p.id] = {
+        total: placeCams.length,
+        online: placeCams.filter(c => c.status === 'active').length,
+      };
+    });
+    return counts;
+  }, [cameras, places]);
+
+  // ── Factory selection → load cameras ──
+  const handleSelectFactory = async (factory) => {
+    setSelectedFactory(factory);
+    setFactoryCamerasLoading(true);
+    try {
+      const cams = await getCameras(factory.id);
+      setFactoryCameras(cams);
+    } catch (err) {
+      console.error('Failed to load factory cameras:', err);
+      setFactoryCameras([]);
+    } finally {
+      setFactoryCamerasLoading(false);
+    }
+  };
+
+  const handleClearGrid = () => {
+    setSelectedFactory(null);
+    setFactoryCameras([]);
+  };
+
+  // ── Canvas drag-and-drop (existing) ──
   const handleDragStart = (e, camera) => {
     e.dataTransfer.setData('camera', JSON.stringify(camera));
     e.dataTransfer.effectAllowed = 'copy';
   };
 
-  // Drag over: allow drop
   const handleDragOver = (e) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
   };
 
-  // Drop: place camera at coordinates
   const handleDrop = (e) => {
     e.preventDefault();
     const cameraData = e.dataTransfer.getData('camera');
@@ -55,14 +110,13 @@ function App() {
     if (cameraData) {
       try {
         const camera = JSON.parse(cameraData);
-        // Calculate position relative to the canvas
         const rect = e.currentTarget.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
         const newPlacedCamera = {
           ...camera,
-          instanceId: Date.now(), // unique ID for placed instance
+          instanceId: Date.now(),
           x,
           y
         };
@@ -79,27 +133,75 @@ function App() {
       const newCamera = await createCamera(newCameraData);
       setCameras((prev) => [...prev, newCamera]);
       setIsModalOpen(false);
+      setAddCameraPlaceId(null);
+      // Refresh factory cameras if a factory is selected
+      if (selectedFactory) {
+        const cams = await getCameras(selectedFactory.id);
+        setFactoryCameras(cams);
+      }
     } catch (err) {
       console.error('Failed to add camera:', err);
       alert('Failed to add camera. Please try again.');
     }
   };
 
-  // Only remove from canvas (unplace), keep in DB & sidebar
-  // Uses instanceId so that multiple drops of the same camera can be closed independently
+  const handleAddPlace = async (placeData) => {
+    try {
+      const newPlace = await createPlace(placeData);
+      setPlaces((prev) => [...prev, newPlace]);
+      setIsPlaceModalOpen(false);
+    } catch (err) {
+      console.error('Failed to add place:', err);
+      alert('Failed to add factory. Please try again.');
+    }
+  };
+
+  const handleDeletePlace = async (id) => {
+    try {
+      await deletePlace(id);
+      setPlaces((prev) => prev.filter(p => p.id !== id));
+      if (selectedFactory?.id === id) {
+        setSelectedFactory(null);
+        setFactoryCameras([]);
+      }
+    } catch (err) {
+      console.error('Failed to delete place:', err);
+      alert('Failed to delete factory. Please try again.');
+    }
+  };
+
   const handleUnplaceCamera = (instanceId) => {
     setPlacedCameras((prev) => prev.filter(c => c.instanceId !== instanceId));
   };
 
-  // Permanently delete from DB + sidebar + canvas
   const handleDeleteCamera = async (cameraId) => {
     try {
       await deleteCamera(cameraId);
       setCameras((prev) => prev.filter(c => c.id !== cameraId));
       setPlacedCameras((prev) => prev.filter(c => c.id !== cameraId));
+      setFactoryCameras((prev) => prev.filter(c => c.id !== cameraId));
     } catch (err) {
       console.error('Failed to delete camera:', err);
       alert('Failed to delete camera. Please try again.');
+    }
+  };
+
+  const handleEditCamera = (camera) => {
+    setEditCamera(camera);
+    setIsModalOpen(true);
+  };
+
+  const handleUpdateCamera = async (cameraId, updates) => {
+    try {
+      const updated = await updateCamera(cameraId, updates);
+      setCameras((prev) => prev.map(c => c.id === cameraId ? updated : c));
+      setPlacedCameras((prev) => prev.map(c => c.id === cameraId ? { ...c, ...updated } : c));
+      setFactoryCameras((prev) => prev.map(c => c.id === cameraId ? { ...c, ...updated } : c));
+      setEditCamera(null);
+      setIsModalOpen(false);
+    } catch (err) {
+      console.error('Failed to update camera:', err);
+      alert('Failed to update camera. Please try again.');
     }
   };
 
@@ -109,7 +211,7 @@ function App() {
 
   return (
     <div className="h-screen w-screen bg-black text-white flex flex-col overflow-hidden font-sans">
-      <Navbar />
+      <Navbar onOpenSettings={() => setIsSettingsOpen(true)} />
 
       {/* Loading State */}
       {loading && (
@@ -140,19 +242,24 @@ function App() {
       {!loading && !error && (
         <>
           <div className="flex flex-1 overflow-hidden">
-            <Sidebar
+            <FactorySidebar
+              factories={places}
+              selectedFactory={selectedFactory}
+              onSelectFactory={handleSelectFactory}
+              cameraCounts={cameraCounts}
               cameras={cameras}
-              onDragStart={handleDragStart}
-              onAddCamera={() => setIsModalOpen(true)}
+              onAddCamera={(placeId) => { setAddCameraPlaceId(placeId); setEditCamera(null); setIsModalOpen(true); }}
+              onEditCamera={handleEditCamera}
               onDeleteCamera={handleDeleteCamera}
+              onAddPlace={() => setIsPlaceModalOpen(true)}
+              onDeletePlace={handleDeletePlace}
             />
-
-            <Canvas
-              placedCameras={placedCameras}
-              onDrop={handleDrop}
-              onDragOver={handleDragOver}
-              onRemoveCamera={handleUnplaceCamera}
-              onViewCamera={(cam) => setViewingCamera(cam)}
+            <CameraGrid
+              cameras={factoryCameras}
+              factoryName={selectedFactory?.name}
+              isLoading={factoryCamerasLoading}
+              onClear={selectedFactory ? handleClearGrid : null}
+              onFactoryDrop={handleSelectFactory}
             />
           </div>
 
@@ -166,8 +273,19 @@ function App() {
           {isModalOpen && (
             <AddCameraModal
               isOpen={isModalOpen}
-              onClose={() => setIsModalOpen(false)}
+              onClose={() => { setIsModalOpen(false); setEditCamera(null); setAddCameraPlaceId(null); }}
               onAddCamera={handleAddCamera}
+              onUpdateCamera={handleUpdateCamera}
+              editCamera={editCamera}
+              defaultPlaceId={addCameraPlaceId}
+            />
+          )}
+
+          {isPlaceModalOpen && (
+            <AddPlaceModal
+              isOpen={isPlaceModalOpen}
+              onClose={() => setIsPlaceModalOpen(false)}
+              onAddPlace={handleAddPlace}
             />
           )}
 
@@ -180,6 +298,12 @@ function App() {
           )}
         </>
       )}
+
+      {/* Settings Panel (slide-out) */}
+      <SettingsPanel
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
     </div>
   );
 }

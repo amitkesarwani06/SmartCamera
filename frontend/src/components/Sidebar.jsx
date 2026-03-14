@@ -1,7 +1,7 @@
 import React from 'react';
-import { Camera, Plus, GripVertical, Trash2 } from 'lucide-react';
+import { Camera, Plus, GripVertical, Trash2, Pencil } from 'lucide-react';
 
-export default function Sidebar({ cameras, onDragStart, onAddCamera, onDeleteCamera }) {
+export default function Sidebar({ cameras, onDragStart, onAddCamera, onDeleteCamera, onEditCamera }) {
     return (
         <aside className="w-80 bg-zinc-900 border-r border-zinc-800 flex flex-col h-full shrink-0">
             <div className="p-4 border-b border-zinc-800">
@@ -37,6 +37,19 @@ export default function Sidebar({ cameras, onDragStart, onAddCamera, onDeleteCam
                             <p className="font-medium text-zinc-200 text-sm truncate group-hover:text-white transition-colors">{camera.name}</p>
                             <p className="text-xs text-zinc-500 truncate">{camera.type}</p>
                         </div>
+
+                        {/* Edit button */}
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                onEditCamera(camera);
+                            }}
+                            className="p-1.5 text-zinc-600 hover:text-blue-400 hover:bg-blue-500/10 rounded-md transition-all opacity-0 group-hover:opacity-100 z-10 relative"
+                            title="Edit camera"
+                        >
+                            <Pencil size={14} />
+                        </button>
 
                         {/* Delete button */}
                         <button

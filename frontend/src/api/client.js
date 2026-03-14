@@ -109,3 +109,32 @@ export async function processVoiceCommand(audioBlob) {
 export async function healthCheck() {
     return fetchAPI('/');
 }
+
+// ============= Settings API =============
+
+export async function getSettings() {
+    return fetchAPI('/settings');
+}
+
+export async function updateSettings(settings) {
+    return fetchAPI('/settings', {
+        method: 'PUT',
+        body: JSON.stringify(settings),
+    });
+}
+
+// ============= Automation API =============
+
+export async function getAutomationStatus() {
+    return fetchAPI('/automation/status');
+}
+
+export async function toggleAutomation() {
+    return fetchAPI('/automation/toggle', {
+        method: 'POST',
+    });
+}
+
+export async function getAutomationScreenshots() {
+    return fetchAPI('/automation/screenshots');
+}
