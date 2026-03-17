@@ -13,6 +13,7 @@ export default function CameraCard({ camera }) {
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [protocol, setProtocol] = useState(null);
     const [timestamp, setTimestamp] = useState(new Date());
+    const [activityDescription, setActivityDescription] = useState('Wait for analysis...');
 
     const streamUrl = camera.streamUrl;
 
@@ -62,7 +63,14 @@ export default function CameraCard({ camera }) {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ image: base64 }),
-            }).catch((err) => console.warn('[Snapshot] Failed:', err));
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.description) {
+                    setActivityDescription(data.description);
+                }
+            })
+            .catch((err) => console.warn('[Snapshot] Failed:', err));
         } catch (err) {
             console.warn('[Snapshot] Canvas error:', err);
         }
@@ -316,7 +324,22 @@ export default function CameraCard({ camera }) {
                         {protocol === 'webrtc' ? '⚡ WebRTC' : '📡 HLS'}
                     </div>
                 )}
+
+                {/* Activity Description (bottom-left area) */}
+                {!videoError && hasStream && (
+                    <div className="absolute bottom-10 left-2 right-2 z-30 pointer-events-none">
+                        <div className="bg-black/40 backdrop-blur-md border border-white/10 p-2 rounded-lg max-w-[90%] transform transition-all duration-500 translate-y-0 group-hover:translate-y-[-4px]">
+                            <div className="flex items-start gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1 shadow-[0_0_8px_rgba(59,130,246,0.6)] animate-pulse" />
+                                <p className="text-[9px] text-zinc-200 leading-relaxed line-clamp-2 italic font-medium">
+                                    {activityDescription}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
+
     );
 }

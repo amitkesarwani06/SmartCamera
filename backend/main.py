@@ -5,11 +5,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Place, Camera
+from models import Place, Camera, Alert
 
 from ai.deepgram_stt import transcribe_audio
 from logic.command_parser import process_command, _keyword_fallback
 from logic.command_executor import execute_command
+
+from automation.scheduler import start_scheduler, stop_scheduler, toggle_scheduler, get_status as get_scheduler_status
+from automation.monitor import get_cached_screenshots
+from settings import get_settings, update_settings
+from vision.vision_executor import process_vision
+from vision.dashboard_capture import save_dashboard_snapshot
 
 app = FastAPI()
 
@@ -17,13 +23,22 @@ app = FastAPI()
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+        "http://localhost:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
+#Start Scheduler in FastAPI Startup
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(start_scheduler())
 # Health check
 @app.get("/")
 def root():
@@ -66,7 +81,7 @@ async def voice(
         print("[Voice] Slow path — calling LLM...")
         loop = asyncio.get_event_loop()
         llm_output = await loop.run_in_executor(None, lambda: __import__('ollama').chat(
-            model='qwen2:1b',
+            model='qwen2:1.5b',
             messages=[
                 {"role": "system", "content": __import__('ai.llm', fromlist=['SYSTEM_PROMPT']).SYSTEM_PROMPT},
                 {"role": "user",   "content": transcript}
@@ -117,7 +132,7 @@ async def command_text(
         llm_output = await loop.run_in_executor(
             None,
             lambda: ollama.chat(
-                model="qwen2:1b",
+                model="qwen2:1.5b",
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user",   "content": transcript}
@@ -249,7 +264,91 @@ def update_camera(id: str, updates: dict, db: Session = Depends(get_db)):
 
     return camera
 
-from vision.vision_executor import process_vision
+# --- Additional Models and Logic ---
+
+# GET alerts
+@app.get("/alerts")
+def get_alerts(db: Session = Depends(get_db)):
+    return db.query(Alert).order_by(Alert.timestamp.desc()).all()
+
+# DELETE alert
+@app.delete("/alerts/{id}")
+def delete_alert(id: str, db: Session = Depends(get_db)):
+    alert = db.query(Alert).filter(Alert.id == id).first()
+    if not alert:
+        raise HTTPException(404, "Alert not found")
+    db.delete(alert)
+    db.commit()
+    return {"message": "Alert deleted"}
+
+
+# --- Dashboard Snapshot Endpoint ---
+
+@app.post("/snapshot/{camera_id}")
+async def receive_snapshot(camera_id: str, body: dict):
+    """
+    Receives a base64-encoded JPEG snapshot from the frontend (captured from a <video> element)
+    and saves it to cache so the next automation cycle can use it for VLM analysis.
+    """
+    image_b64 = body.get("image")
+    if not image_b64:
+        raise HTTPException(400, "No image data provided")
+
+    path = save_dashboard_snapshot(camera_id, image_b64)
+    return {"status": "ok", "saved_to": path}
+
+
+# ── Settings API ────────────────────────────────────────────────────────────
+
+@app.get("/settings")
+def read_settings():
+    """Return all current automation settings."""
+    return get_settings()
+
+
+@app.put("/settings")
+def write_settings(body: dict):
+    """Update automation settings (partial merge)."""
+    # Validate interval range
+    if "interval_seconds" in body:
+        val = int(body["interval_seconds"])
+        if val < 60 or val > 1800:
+            raise HTTPException(400, "interval_seconds must be between 60 and 1800")
+        body["interval_seconds"] = val
+
+    # Validate max screenshots range
+    if "max_screenshots" in body:
+        val = int(body["max_screenshots"])
+        if val < 5 or val > 50:
+            raise HTTPException(400, "max_screenshots must be between 5 and 50")
+        body["max_screenshots"] = val
+
+    updated = update_settings(body)
+    return {"status": "ok", "settings": updated}
+
+
+# ── Automation Control API ──────────────────────────────────────────────────
+
+@app.get("/automation/status")
+def automation_status():
+    """Return scheduler state: is_running, last_run_time, next_run_time, interval."""
+    return get_scheduler_status()
+
+
+@app.post("/automation/toggle")
+async def automation_toggle():
+    """Toggle the automation scheduler on/off."""
+    new_state = await toggle_scheduler()
+    return {"status": "ok", "is_running": new_state}
+
+
+@app.get("/automation/screenshots")
+def automation_screenshots():
+    """Return list of cached screenshots with metadata."""
+    return get_cached_screenshots()
+
+
+# ── Test Endpoints ──────────────────────────────────────────────────────────
 
 @app.get("/test-vlm")
 async def test_vlm():
@@ -259,3 +358,5 @@ async def test_vlm():
     )
 
     return result
+
+

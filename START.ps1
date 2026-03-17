@@ -22,17 +22,29 @@ if (-not (Test-Path "frontend\node_modules")) {
     exit
 }
 
-# Start Backend
-Write-Host "[1/2] Starting Backend Server..." -ForegroundColor Green
+# Start MediaMTX (Docker RTSP Server)
+Write-Host "[1/3] Starting MediaMTX RTSP Server (Docker)..." -ForegroundColor Magenta
+docker compose up -d 2>&1 | Out-Null
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "       MediaMTX running at rtsp://localhost:8554/sample" -ForegroundColor Green
+}
+else {
+    Write-Host "       WARNING: Docker may not be running. MediaMTX skipped." -ForegroundColor Yellow
+}
+
+Start-Sleep -Seconds 2
+
+# Start Backend (using explicit venv Python path — always loads Pillow correctly)
+Write-Host "[2/3] Starting Backend Server..." -ForegroundColor Green
 Start-Process powershell -ArgumentList `
     "-NoExit", `
     "-Command", `
-    "cd '$PSScriptRoot\backend'; .\venv\Scripts\activate; Write-Host 'Backend Server Running on http://localhost:8000' -ForegroundColor Green; uvicorn main:app --reload --port 8000"
+    "cd '$PSScriptRoot\backend'; Write-Host 'Backend Server Running on http://localhost:8000' -ForegroundColor Green; .\venv\Scripts\python.exe -m uvicorn main:app --reload --port 8000"
 
 Start-Sleep -Seconds 3
 
 # Start Frontend
-Write-Host "[2/2] Starting Frontend Server..." -ForegroundColor Cyan
+Write-Host "[3/3] Starting Frontend Server..." -ForegroundColor Cyan
 Start-Process powershell -ArgumentList `
     "-NoExit", `
     "-Command", `

@@ -6,6 +6,7 @@ import FactorySidebar from './components/FactorySidebar';
 import CameraGrid from './components/CameraGrid';
 import AddCameraModal from './components/AddCameraModal';
 import AddPlaceModal from './components/AddPlaceModal';
+import SmartAlertsPanel from './components/SmartAlertsPanel';
 import VoiceAssistantFAB from './components/VoiceAssistantFAB';
 import SettingsPanel from './components/SettingsPanel';
 import VideoPlayerModal from './components/VideoPlayerModal';
@@ -24,17 +25,33 @@ function App() {
   const [viewingCamera, setViewingCamera] = useState(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [addCameraPlaceId, setAddCameraPlaceId] = useState(null);
+  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' or 'intelligence'
+  const [alerts, setAlerts] = useState([]); // Shared alerts state
 
   // ── CCTV Dashboard State ──
   const [selectedFactory, setSelectedFactory] = useState(null);
   const [factoryCameras, setFactoryCameras] = useState([]);
   const [factoryCamerasLoading, setFactoryCamerasLoading] = useState(false);
 
-  // Fetch cameras & places from backend on mount
+  // Fetch cameras, places & alerts from backend on mount
   useEffect(() => {
     loadCameras();
     loadPlaces();
+    loadAlerts();
+    const interval = setInterval(loadAlerts, 10000); // Polling for new intelligence
+    return () => clearInterval(interval);
   }, []);
+
+  const loadAlerts = async () => {
+    try {
+      const resp = await fetch('http://localhost:8000/alerts');
+      const data = await resp.json();
+      setAlerts(data);
+    } catch (err) {
+      console.error('Failed to load alerts:', err);
+    }
+  };
+
 
   const loadCameras = async () => {
     try {
@@ -211,7 +228,11 @@ function App() {
 
   return (
     <div className="h-screen w-screen bg-black text-white flex flex-col overflow-hidden font-sans">
-      <Navbar onOpenSettings={() => setIsSettingsOpen(true)} />
+      <Navbar 
+        onShowSettings={() => setIsSettingsOpen(true)} 
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+      />
 
       {/* Loading State */}
       {loading && (
@@ -240,64 +261,69 @@ function App() {
 
       {/* Main Content */}
       {!loading && !error && (
-        <>
-          <div className="flex flex-1 overflow-hidden">
-            <FactorySidebar
-              factories={places}
-              selectedFactory={selectedFactory}
-              onSelectFactory={handleSelectFactory}
-              cameraCounts={cameraCounts}
-              cameras={cameras}
-              onAddCamera={(placeId) => { setAddCameraPlaceId(placeId); setEditCamera(null); setIsModalOpen(true); }}
-              onEditCamera={handleEditCamera}
-              onDeleteCamera={handleDeleteCamera}
-              onAddPlace={() => setIsPlaceModalOpen(true)}
-              onDeletePlace={handleDeletePlace}
-            />
-            <CameraGrid
-              cameras={factoryCameras}
-              factoryName={selectedFactory?.name}
-              isLoading={factoryCamerasLoading}
-              onClear={selectedFactory ? handleClearGrid : null}
-              onFactoryDrop={handleSelectFactory}
-            />
-          </div>
-
-          <VoiceAssistantFAB
-            isListening={isListening}
-            onToggle={handleToggleVoice}
-            onCameraFound={(cam) => setViewingCamera(cam)}
-            onCamerasChanged={loadCameras}
-          />
-
-          {isModalOpen && (
-            <AddCameraModal
-              isOpen={isModalOpen}
-              onClose={() => { setIsModalOpen(false); setEditCamera(null); setAddCameraPlaceId(null); }}
-              onAddCamera={handleAddCamera}
-              onUpdateCamera={handleUpdateCamera}
-              editCamera={editCamera}
-              defaultPlaceId={addCameraPlaceId}
-            />
+        <div className="flex-1 flex overflow-hidden">
+          {activeTab === 'dashboard' ? (
+            <>
+              <FactorySidebar
+                factories={places}
+                selectedFactory={selectedFactory}
+                onSelectFactory={handleSelectFactory}
+                cameraCounts={cameraCounts}
+                cameras={cameras}
+                onAddCamera={(placeId) => { setAddCameraPlaceId(placeId); setEditCamera(null); setIsModalOpen(true); }}
+                onEditCamera={handleEditCamera}
+                onDeleteCamera={handleDeleteCamera}
+                onAddPlace={() => setIsPlaceModalOpen(true)}
+                onDeletePlace={handleDeletePlace}
+              />
+              <CameraGrid
+                cameras={factoryCameras}
+                factoryName={selectedFactory?.name}
+                isLoading={factoryCamerasLoading}
+                onClear={handleClearGrid}
+                onFactoryDrop={handleSelectFactory}
+              />
+            </>
+          ) : (
+            <SmartAlertsPanel alerts={alerts} />
           )}
-
-          {isPlaceModalOpen && (
-            <AddPlaceModal
-              isOpen={isPlaceModalOpen}
-              onClose={() => setIsPlaceModalOpen(false)}
-              onAddPlace={handleAddPlace}
-            />
-          )}
-
-          {viewingCamera && (
-            <VideoPlayerModal
-              camera={viewingCamera}
-              onClose={() => setViewingCamera(null)}
-              onCameraUpdated={loadCameras}
-            />
-          )}
-        </>
+        </div>
       )}
+
+      <VoiceAssistantFAB
+        isListening={isListening}
+        onToggle={handleToggleVoice}
+        onCameraFound={(cam) => setViewingCamera(cam)}
+        onCamerasChanged={loadCameras}
+      />
+
+      {isModalOpen && (
+        <AddCameraModal
+          isOpen={isModalOpen}
+          onClose={() => { setIsModalOpen(false); setEditCamera(null); setAddCameraPlaceId(null); }}
+          onAddCamera={handleAddCamera}
+          onUpdateCamera={handleUpdateCamera}
+          editCamera={editCamera}
+          defaultPlaceId={addCameraPlaceId}
+        />
+      )}
+
+      {isPlaceModalOpen && (
+        <AddPlaceModal
+          isOpen={isPlaceModalOpen}
+          onClose={() => setIsPlaceModalOpen(false)}
+          onAddPlace={handleAddPlace}
+        />
+      )}
+
+      {viewingCamera && (
+        <VideoPlayerModal
+          camera={viewingCamera}
+          onClose={() => setViewingCamera(null)}
+          onCameraUpdated={loadCameras}
+        />
+      )}
+
 
       {/* Settings Panel (slide-out) */}
       <SettingsPanel

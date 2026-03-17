@@ -1,0 +1,23 @@
+{
+  "interval_seconds": 300,
+  "max_screenshots": 15,
+  "alert_keywords": [
+    "fire",
+    "smoke",
+    "suspicious",
+    "crowd",
+    "motion",
+    "missing PPE",
+    "no gloves",
+    "no mask",
+    "no vest",
+    "machine idle",
+    "static machine",
+    "broken yarn",
+    "spinning malfunction"
+  ],
+  "enable_webhook": false,
+  "webhook_url": "",
+  "enable_email": false,
+  "automation_enabled": true
+}

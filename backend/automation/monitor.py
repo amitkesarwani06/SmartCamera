@@ -5,7 +5,7 @@ import asyncio
 import httpx
 from vision.camera_capture import capture_frame
 from vision.dashboard_capture import get_latest_dashboard_snapshot
-from ai.vision_llm import analyze_industrial_safety
+from ai.vision_llm import analyze_smart_security
 from settings import get_max_screenshots, get_alert_keywords, is_webhook_enabled, get_webhook_url
 
 from database import SessionLocal
@@ -50,8 +50,8 @@ async def run_monitoring():
                     print(f"[Automation] No snapshot available for {camera.name}, skipping.")
                     continue
 
-            # Analyze for alerts using industrial-specific VLM
-            result = await analyze_industrial_safety(captured_path)
+            # Analyze for alerts using advanced Smart Security VLM
+            result = await analyze_smart_security(captured_path)
             print(f"[Automation] VLM Result for {camera.name}: {result}")
 
             # Skip alert processing for invalid/garbage VLM output
