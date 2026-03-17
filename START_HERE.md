@@ -118,4 +118,4 @@ start_frontend.bat
 3. Then run `start_frontend.bat` (in frontend folder)
 4. Open http://localhost:5173
 
-Enjoy your SmartCamera app! 🎥
+Enjoy your SmartCamera app! 🎥 

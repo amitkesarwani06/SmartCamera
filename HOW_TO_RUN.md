@@ -1,125 +1,96 @@
 # SmartCamera - How to Run
 
-## ✅ Quick Start (Easiest Method)
+## ⚡ One-Click Start (Recommended)
 
-**Double-click this file**: `START.ps1`
+**Double-click `START.ps1`** in `e:\Smartcamera\`
 
-It will automatically:
-1. Start the backend server (port 8000)
-2. Start the frontend server (port 5173)
-3. Open your browser to http://localhost:5173
+This automatically starts the backend, frontend, and opens the browser.
+
+> [!IMPORTANT]
+> **Prerequisites that must be running BEFORE starting:**
+> - **Docker Desktop** must be open and running (green icon in system tray)
+> - **Ollama** must be installed
 
 ---
 
-## 🔧 Manual Start (If you prefer)
+## Step-by-Step Manual Start
 
-### Step 1: Start Backend
+### 1️⃣ Start MediaMTX (RTSP Server — for testing)
+```powershell
+cd e:\Smartcamera
+docker compose up -d
+```
+Stream will be available at `rtsp://localhost:8554/sample`
 
-```bash
+---
+
+### 2️⃣ Start Backend
+```powershell
 cd e:\Smartcamera\backend
 .\venv\Scripts\activate
 uvicorn main:app --reload --port 8000
 ```
+Backend API: `http://localhost:8000`
 
-**Backend will be running at**: http://localhost:8000
+---
 
-### Step 2: Start Frontend (in a new terminal)
-
-```bash
+### 3️⃣ Start Frontend *(new terminal)*
+```powershell
 cd e:\Smartcamera\frontend
 npm run dev
 ```
-
-**Frontend will be running at**: http://localhost:5173
-
-### Step 3: Open Browser
-
-Navigate to: **http://localhost:5173**
+Dashboard UI: `http://localhost:5173`
 
 ---
 
-## 🌐 Accessing the Application
-
-Once both servers are running:
-
-1. **Open your web browser**
-2. Go to: **http://localhost:5173**
-3. You should see the SmartCamera interface!
+### 4️⃣ Open Browser
+Navigate to **`http://localhost:5173`**
 
 ---
 
-## ❓ Troubleshooting
+## What Should You See?
 
-### Problem: "Can't access localhost"
+| Terminal | Success Message |
+|----------|----------------|
+| Backend  | `INFO: Uvicorn running on http://127.0.0.1:8000` |
+| Backend  | `[Scheduler] Starting automation loop (Interval: 300s)` |
+| Frontend | `VITE ready in XXX ms → Local: http://localhost:5173/` |
 
-**Solution:**
-1. Check if both servers are running (you should see 2 PowerShell windows)
-2. Wait 10-15 seconds for servers to fully start
-3. Make sure no firewall is blocking ports 8000 or 5173
+---
 
-### Problem: "Backend not working"
+## Stopping Everything
 
-**Check:**
+| Component | Command |
+|-----------|---------|
+| Backend / Frontend | Press `Ctrl+C` in each terminal |
+| MediaMTX Docker | `docker compose down` (from `e:\Smartcamera`) |
+
+---
+
+## First-Time Setup (only once)
+
 ```powershell
-# In PowerShell, run:
-Invoke-RestMethod -Uri "http://localhost:8000"
-```
-
-Should return: `{"status":"CCTV Voice Agent Backend Running"}`
-
-### Problem: "Frontend shows error"
-
-**Solution:**
-1. Make sure backend is running first
-2. Check the browser console (F12) for errors
-3. Try clicking the "Retry" button on the error screen
-
----
-
-## 🛑 Stopping the Servers
-
-Simply close the PowerShell windows running the servers, or press **Ctrl+C** in each terminal.
-
----
-
-## 📋 What Should You See?
-
-**Backend Terminal:**
-```
-INFO:     Uvicorn running on http://127.0.0.1:8000
-INFO:     Application startup complete.
-```
-
-**Frontend Terminal:**
-```
-  VITE v7.3.1  ready in XXX ms
-
-  ➜  Local:   http://localhost:5173/
-```
-
-**Browser (http://localhost:5173):**
-- Black interface with camera management UI
-- Sidebar on the left with camera list
-- Canvas in the center for drag-and-drop
-- Microphone button in bottom-right corner
-
----
-
-## 🎯 First-Time Setup (Only if needed)
-
-If servers don't start, you may need to install dependencies:
-
-**Backend:**
-```bash
+# Backend dependencies
 cd e:\Smartcamera\backend
 pip install -r requirements.txt
 python init_db.py
-```
 
-**Frontend:**
-```bash
+# Frontend dependencies
 cd e:\Smartcamera\frontend
 npm install
+
+# Pull AI models (takes time — do this once)
+ollama pull llava:7b
+ollama pull llama3.2:1b
 ```
 
-Then use the `START.ps1` script!
+---
+
+## Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| CORS error in browser | Check the frontend port (5173 or 5174?) — both are now whitelisted in `main.py` |
+| `model 'llava:7b' not found` | Run `ollama pull llava:7b` |
+| `docker compose up -d` fails | Open Docker Desktop and wait for green icon |
+| Backend won't start | Make sure venv is activated: `.\venv\Scripts\activate` |
