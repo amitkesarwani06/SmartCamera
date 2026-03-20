@@ -31,14 +31,24 @@ async def run_monitoring():
             if not camera.streamUrl:
                 continue
 
+            # Skip offline cameras — avoids wasting time on 300+ unreachable VMS streams
+            if camera.status and camera.status.lower() == "offline":
+                continue
+
             print(f"[Automation] Processing camera: {camera.name} ({camera.id})")
             
             # Generate unique filename for this screenshot
             filename = f"{camera.id}_{uuid.uuid4().hex}.jpg"
             image_path = os.path.join(CACHE_FOLDER, filename)
 
-            # --- Primary: Capture frame from RTSP stream ---
-            captured_path = capture_frame(camera.streamUrl, save_path=image_path)
+            # --- Primary: Capture frame from RTSP stream (in a thread to prevent blocking event loop) ---
+            try:
+                # Add a timeout so bad streams don't hang the thread indefinitely (5 seconds = 5000000 us)
+                os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "timeout;5000000|rtsp_transport;tcp"
+                captured_path = await asyncio.to_thread(capture_frame, camera.streamUrl, save_path=image_path)
+            except Exception as e:
+                print(f"[Automation] Capture thread error: {e}")
+                captured_path = None
 
             # --- Fallback: Use latest dashboard snapshot if RTSP failed ---
             if not captured_path:

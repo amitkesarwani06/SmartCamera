@@ -62,6 +62,12 @@ export default function LiveCameraFeed({ camera, onClose }) {
         if (!url) return null;
         const path = getRtspPath(url);
         if (path) return `http://localhost:8888/${path}/`;
+        
+        // Proxy VMS streams through Vite to bypass CORS
+        if (url.startsWith('https://vms.cotcorpcontrol.in/')) {
+            return url.replace('https://vms.cotcorpcontrol.in', '/vms-proxy');
+        }
+
         if (url.includes('.m3u8') || url.startsWith('http')) return url;
         return null;
     };

@@ -222,7 +222,9 @@ def serialize_place(place):
         "name": place.name,
         "location": place.location,
         "description": place.description,
-        "cameras": place.cameras
+        "cameras": place.cameras,
+        "lat": place.lat,
+        "long": place.long,
     }
 
 

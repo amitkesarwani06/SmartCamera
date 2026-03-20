@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getSettings, updateSettings, getAutomationStatus, toggleAutomation } from '../api/client';
+import { getSettings, updateSettings, getAutomationStatus, toggleAutomation, syncVms } from '../api/client';
 
 /**
  * SettingsPanel — slide-out panel for automation configuration.
@@ -13,6 +13,7 @@ export default function SettingsPanel({ isOpen, onClose }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [newKeyword, setNewKeyword] = useState('');
+  const [syncing, setSyncing] = useState(false);
 
   // ── Load settings & status on open ───────────────────────────────────────
   const loadData = useCallback(async () => {
@@ -297,6 +298,43 @@ export default function SettingsPanel({ isOpen, onClose }) {
                     }}
                   />
                 )}
+              </Section>
+
+              {/* ── VMS Integration ────────────────────────── */}
+              <Section title="VMS Integration">
+                <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 12px' }}>
+                  Sync cameras & groups from the external VMS server.
+                </p>
+                <button
+                  onClick={async () => {
+                    setSyncing(true);
+                    setMessage('');
+                    try {
+                      const res = await syncVms();
+                      setMessage(
+                        `✓ Synced: ${res.places_created} groups created, ${res.places_updated} updated, ` +
+                        `${res.cameras_created} cameras created, ${res.cameras_updated} updated`
+                      );
+                    } catch (err) {
+                      setMessage('⚠ VMS sync failed — check server connectivity');
+                    } finally {
+                      setSyncing(false);
+                    }
+                  }}
+                  disabled={syncing}
+                  style={{
+                    width: '100%', padding: '12px', borderRadius: '10px', border: 'none',
+                    background: syncing
+                      ? 'rgba(99,102,241,0.15)'
+                      : 'linear-gradient(135deg, #0ea5e9, #6366f1)',
+                    color: '#fff', cursor: syncing ? 'wait' : 'pointer',
+                    fontSize: '13px', fontWeight: 700,
+                    opacity: syncing ? 0.7 : 1, transition: 'all 0.2s',
+                    boxShadow: syncing ? 'none' : '0 4px 15px rgba(14,165,233,0.3)',
+                  }}
+                >
+                  {syncing ? '⏳ Syncing…' : '🔄 Sync from VMS'}
+                </button>
               </Section>
             </>
           )}
