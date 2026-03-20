@@ -16,6 +16,7 @@ from automation.monitor import get_cached_screenshots
 from settings import get_settings, update_settings
 from vision.vision_executor import process_vision
 from vision.dashboard_capture import save_dashboard_snapshot
+from vms_sync import sync_vms_to_db
 
 app = FastAPI()
 
@@ -360,3 +361,15 @@ async def test_vlm():
     return result
 
 
+
+# ── VMS Sync Endpoint ───────────────────────────────────────────────────────
+
+@app.post("/vms/sync")
+async def vms_sync(db: Session = Depends(get_db)):
+    """Fetch cameras & groups from external VMS and upsert into local DB."""
+    try:
+        result = await sync_vms_to_db(db)
+        return {"status": "ok", **result}
+    except Exception as e:
+        print(f"[VMS Sync] Error: {e}")
+        raise HTTPException(500, f"VMS sync failed: {e}")

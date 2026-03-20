@@ -138,3 +138,11 @@ export async function toggleAutomation() {
 export async function getAutomationScreenshots() {
     return fetchAPI('/automation/screenshots');
 }
+
+// ============= VMS Sync API =============
+
+export async function syncVms() {
+    return fetchAPI('/vms/sync', {
+        method: 'POST',
+    });
+}

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, ForeignKey, DateTime
+from sqlalchemy import Column, String, Integer, Float, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -14,6 +14,9 @@ class Place(Base):
     location = Column(String)
     description = Column(String)
     cameras = Column(Integer)
+    lat = Column(Float, nullable=True)
+    long = Column(Float, nullable=True)
+    vms_group_id = Column(Integer, nullable=True)
 
 class Camera(Base):
     __tablename__ = "cameras"
@@ -23,6 +26,7 @@ class Camera(Base):
     type = Column(String)
     status = Column(String)
     placeId = Column(String, ForeignKey("places.id"))
+    vms_id = Column(Integer, nullable=True)
 
 class Alert(Base):
     __tablename__ = "alerts"
